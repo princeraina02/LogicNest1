@@ -1,7 +1,7 @@
 import RPi.GPIO as GPIO
 import time
 from flask import Flask, jsonify, request
-from adafruit_dht import DHT11
+from adafruit_dht import DHT22
 import board
 
 app = Flask(__name__)
@@ -17,7 +17,7 @@ for pin in DEVICE_PINS.values():
     GPIO.setup(pin, GPIO.OUT)
 servo = GPIO.PWM(DEVICE_PINS['gate'], 50)  # 50 Hz PWM for servo
 servo.start(0)
-dht1_device = DHT11(board.D4)  # DHT11 on GPIO 4 for sensor ID 1
+dht1_device = DHT22(board.D4)  # Updated to DHT22 on GPIO 4 for sensor ID 1
 
 # Initial states and sensor data
 device_states = {device: False for device in DEVICE_PINS.keys()}
@@ -37,7 +37,7 @@ def get_sensor_data(sensor_id='1'):
         temp = dht1_device.temperature
         humi = dht1_device.humidity
         if temp is None or humi is None:
-            raise ValueError("Failed to read from DHT1")
+            raise ValueError("Failed to read from DHT22")
         sensor_data[f'temperature{sensor_id}'] = temp
         sensor_data[f'humidity{sensor_id}'] = humi
         sensor_status['dht1'] = True  # Sensor is active
