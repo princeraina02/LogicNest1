@@ -22,6 +22,7 @@ dht1_device = DHT11(board.D4)  # DHT11 on GPIO 4 for sensor ID 1
 # Initial states and sensor data
 device_states = {device: False for device in DEVICE_PINS.keys()}
 sensor_data = {'temperature1': None, 'humidity1': None}
+sensor_status = {'dht1': False}  # Tracks if sensor is active
 
 # Log file
 LOG_FILE = "sensor_data.log"
@@ -39,10 +40,24 @@ def get_sensor_data(sensor_id='1'):
             raise ValueError("Failed to read from DHT1")
         sensor_data[f'temperature{sensor_id}'] = temp
         sensor_data[f'humidity{sensor_id}'] = humi
+        sensor_status['dht1'] = True  # Sensor is active
         log_data(temp, humi)
         return temp, humi
     except Exception as e:
+        sensor_status['dht1'] = False  # Sensor is inactive
         return None, None
+
+def check_device_status(device):
+    if device in DEVICE_PINS:
+        if device == 'gate':
+            # Approximate gate status based on last known state (simplified)
+            return device_states[device]
+        else:
+            current_state = GPIO.input(DEVICE_PINS[device]) == GPIO.HIGH
+            if current_state != device_states[device]:
+                device_states[device] = current_state  # Sync state
+            return current_state
+    return False
 
 def toggle_device(device, state):
     try:
@@ -75,7 +90,7 @@ def process_command(command_text):
         devices.update({'gate': 'gate'})
         for full_device, short_name in devices.items():
             if short_name in command_text or (short_name.split('_')[0] + ' one' in command_text):
-                current_state = device_states.get(full_device, False)
+                current_state = check_device_status(full_device)
                 new_state = None
                 for ind, state in state_indicators.items():
                     if ind in command_text:
@@ -107,9 +122,10 @@ def process_command(command_text):
                     if next_word == 'one' or next_word == '1':
                         sensor_id = '1'
                         break
-            sensor_id = sensor_id or '1'  # Default to sensor 1 if not specified
+            sensor_id = sensor_id or '1'  # Default to sensor 1
             temp = sensor_data.get(f'temperature{sensor_id}')
-            response = f"The temperature from sensor {sensor_id} is {temp}°C, guarded by my warm embrace!" if temp is not None else "I can’t sense the temperature from sensor {sensor_id}—my magic dims!"
+            sensor_active = sensor_status.get('dht1', False)
+            response = f"The temperature from sensor {sensor_id} is {temp}°C, guarded by my warm embrace!" if temp is not None and sensor_active else "My senses are dim—sensor {sensor_id} is inactive or reading failed!"
         elif 'humidity' in command_text:
             sensor_id = None
             for i, word in enumerate(words):
@@ -118,9 +134,10 @@ def process_command(command_text):
                     if next_word == 'one' or next_word == '1':
                         sensor_id = '1'
                         break
-            sensor_id = sensor_id or '1'  # Default to sensor 1 if not specified
+            sensor_id = sensor_id or '1'  # Default to sensor 1
             humi = sensor_data.get(f'humidity{sensor_id}')
-            response = f"The humidity from sensor {sensor_id} is {humi}%, a misty veil in the air!" if humi is not None else "I can’t feel the humidity from sensor {sensor_id}—my powers fade!"
+            sensor_active = sensor_status.get('dht1', False)
+            response = f"The humidity from sensor {sensor_id} is {humi}%, a misty veil in the air!" if humi is not None and sensor_active else "My powers fade—sensor {sensor_id} is inactive or reading failed!"
 
     return response
 
@@ -128,17 +145,19 @@ def process_command(command_text):
 def get_sensors():
     temp, humi = get_sensor_data()
     if temp is None or humi is None:
-        return jsonify({"error": "Sensor reading failed"}), 500
-    return jsonify({"temperature1": temp, "humidity1": humi})
+        return jsonify({"error": "Sensor reading failed", "status": {"dht1": False}}), 500
+    return jsonify({"temperature1": temp, "humidity1": humi, "status": {"dht1": True}})
 
 @app.route('/api/control', methods=['POST'])
 def control():
     data = request.json
     device = data.get('device')
     state = data.get('state')
-    if toggle_device(device, state):
-        return jsonify({"status": "success"})
-    return jsonify({"error": "Control failed"}), 500
+    success = toggle_device(device, state)
+    current_state = check_device_status(device) if device in DEVICE_PINS else False
+    if success:
+        return jsonify({"status": "success", "device_state": current_state})
+    return jsonify({"error": "Control failed", "device_state": current_state}), 500
 
 @app.route('/api/command', methods=['POST'])
 def handle_command():
