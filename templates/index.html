@@ -114,7 +114,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="flex items-center justify-between">
                     <div class="flex-grow mr-4">
                         <input type="text" id="text-input" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type your message...">
@@ -132,7 +132,7 @@
                         </button>
                     </div>
                 </div>
-                
+
                 <div id="status" class="mt-2 text-sm text-gray-500 text-center hidden">Listening...</div>
             </div>
 
@@ -148,7 +148,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                 </svg>
                             </div>
-                            <p class="text-sm text-gray-600">Temperature <span id="temp-status" class="status-dot red-dot"></span></p>
+                            <p class="text-sm text-gray-600">Temperature1 <span id="temp-status" class="status-dot red-dot"></span></p>
                             <p id="temperature" class="text-2xl font-bold text-blue-600">--°C</p>
                         </div>
                         <div class="bg-green-50 p-4 rounded-lg text-center">
@@ -157,7 +157,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
                                 </svg>
                             </div>
-                            <p class="text-sm text-gray-600">Humidity <span id="humi-status" class="status-dot red-dot"></span></p>
+                            <p class="text-sm text-gray-600">Humidity1 <span id="humi-status" class="status-dot red-dot"></span></p>
                             <p id="humidity" class="text-2xl font-bold text-green-600">--%</p>
                         </div>
                     </div>
@@ -211,9 +211,10 @@
 
     <!-- ... (previous HTML remains unchanged until script) ... -->
 
+    <!-- ... (previous HTML remains the same until script) ... -->
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Elements
             const micBtn = document.getElementById('mic-btn');
             const sendBtn = document.getElementById('send-btn');
             const textInput = document.getElementById('text-input');
@@ -232,10 +233,6 @@
             const lightLabel = lightToggle.closest('div').querySelector('label');
             const fanLabel = fanToggle.closest('div').querySelector('label');
             const gateLabel = gateToggle.closest('div').querySelector('label');
-
-            // Note: SpeechRecognition may require internet in some browsers (e.g., Chrome).
-            // Test offline in Firefox or use a backend like Coqui STT for full offline support.
-            // SpeechSynthesis is fully offline-capable in supported browsers.
 
             let recognition = null;
             if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
@@ -261,11 +258,11 @@
             });
 
             lightToggle.addEventListener('change', function() {
-                if (!lightToggle.disabled) toggleDevice('light1', this.checked);
+                if (!lightToggle.disabled) toggleDevice('light1_roomA', this.checked);
             });
 
             fanToggle.addEventListener('change', function() {
-                if (!fanToggle.disabled) toggleDevice('fan1', this.checked);
+                if (!fanToggle.disabled) toggleDevice('fan1_roomA', this.checked);
             });
 
             gateToggle.addEventListener('change', function() {
@@ -282,10 +279,7 @@
                 recognition.onresult = function(event) {
                     const transcript = event.results[event.results.length - 1][0].transcript;
                     textInput.value = transcript;
-                    addMessage(transcript, 'user');
-                    const response = 'I got it, how can I help you?';
-                    addMessage(response, 'assistant');
-                    speakText(response);
+                    sendCommand(transcript);
                 };
 
                 recognition.onend = function() {
@@ -297,7 +291,7 @@
                     console.error('Speech recognition error', event.error);
                     statusEl.classList.add('hidden');
                     micBtn.classList.remove('listening');
-                    const errorMessage = 'Sorry, I couldn’t understand that. Please try again.';
+                    const errorMessage = 'Oh no, my ears failed me! Try again.';
                     addMessage(errorMessage, 'assistant');
                     speakText(errorMessage);
                 };
@@ -306,7 +300,7 @@
             function startListening(event) {
                 event.preventDefault();
                 if (!recognition) {
-                    const errorMessage = 'Your browser does not support speech recognition.';
+                    const errorMessage = 'My voice magic is weak here—browser unsupported!';
                     addMessage(errorMessage, 'assistant');
                     speakText(errorMessage);
                     return;
@@ -321,11 +315,29 @@
             function sendMessage() {
                 const message = textInput.value.trim();
                 if (!message) return;
-                addMessage(message, 'user');
-                const response = 'I got it, how can I help you?';
-                addMessage(response, 'assistant');
-                speakText(response);
+                sendCommand(message);
                 textInput.value = '';
+            }
+
+            function sendCommand(message) {
+                addMessage(message, 'user');
+                fetch('/api/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: message })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const response = data.response;
+                    addMessage(response, 'assistant');
+                    speakText(response);
+                })
+                .catch(error => {
+                    console.error('Command processing error:', error);
+                    const errorMessage = 'Service is currently unavailable.';
+                    addMessage(errorMessage, 'assistant');
+                    speakText(errorMessage);
+                });
             }
 
             function addMessage(text, sender) {
@@ -359,8 +371,8 @@
                         return response.json();
                     })
                     .then(data => {
-                        temperatureEl.textContent = `${data.temperature}°C`;
-                        humidityEl.textContent = `${data.humidity}%`;
+                        temperatureEl.textContent = `${data.temperature_roomA}°C`;
+                        humidityEl.textContent = `${data.humidity_roomA}%`;
                         tempStatusEl.classList.remove('red-dot');
                         tempStatusEl.classList.add('green-dot');
                         humiStatusEl.classList.remove('red-dot');
@@ -400,7 +412,7 @@
             }
 
             function updateStatus(device, isActive) {
-                const statusEl = document.getElementById(`${device}-status`) || {};
+                const statusEl = document.getElementById(`${device.replace('_roomA', '')}-status`) || {};
                 if (statusEl) {
                     statusEl.classList.remove(isActive ? 'red-dot' : 'green-dot');
                     statusEl.classList.add(isActive ? 'green-dot' : 'red-dot');
@@ -415,7 +427,7 @@
                     { toggle: gateToggle, label: gateLabel, status: gateStatusEl }
                 ];
                 controls.forEach(control => {
-                    const isDeviceSpecific = device ? control.status === document.getElementById(`${device}-status`) : true;
+                    const isDeviceSpecific = device ? control.status.id.replace('-status', '') === device.replace('_roomA', '') : true;
                     if (isDeviceSpecific) {
                         control.toggle.disabled = !isActive;
                         control.label.classList.toggle('disabled', !isActive);
