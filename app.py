@@ -1,82 +1,74 @@
-from flask import Flask, render_template, request, jsonify
-import json
-import os
-from modules.sensors import get_sensor_readings
-from modules.device_control import toggle_device
-from modules.ai_service import get_ai_response
-import threading
+import RPi.GPIO as GPIO
 import time
+from flask import Flask, jsonify, request
+from adafruit_dht import DHT11
+import board
 
 app = Flask(__name__)
 
-# Store the current state of devices
-device_states = {
-    "light": False,
-    "fan": False
-}
+# GPIO Setup
+GPIO.setmode(GPIO.BCM)
+LIGHT_PIN = 17  # GPIO 17 for light1
+FAN_PIN = 27    # GPIO 27 for fan1
+SERVO_PIN = 18  # GPIO 18 for servo motor (gate)
+GPIO.setup(LIGHT_PIN, GPIO.OUT)
+GPIO.setup(FAN_PIN, GPIO.OUT)
+servo = GPIO.PWM(SERVO_PIN, 50)  # 50 Hz PWM for servo
+servo.start(0)
+dht_device = DHT11(board.D4)  # DHT11 on GPIO 4 (adjust pin as per wiring)
 
-# Background thread for sensor readings
-sensor_data = {"temperature": 0, "humidity": 0}
+# Initial states
+GPIO.output(LIGHT_PIN, GPIO.LOW)
+GPIO.output(FAN_PIN, GPIO.LOW)
 
-def sensor_thread():
-    while True:
-        sensor_data.update(get_sensor_readings())
-        time.sleep(5)  # Update every 5 seconds
+# Log file for local data storage
+LOG_FILE = "sensor_data.log"
 
-# Start sensor thread
-threading.Thread(target=sensor_thread, daemon=True).start()
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/api/chat', methods=['POST'])
-def chat():
-    data = request.json
-    user_message = data.get('message', '')
-    
-    if not user_message:
-        return jsonify({"error": "No message provided"}), 400
-    
-    # Get response from AI service
-    response = get_ai_response(user_message, device_states)
-    
-    # Check if the response contains a command to control devices
-    if "turn on light" in user_message.lower():
-        toggle_device("light", True)
-        device_states["light"] = True
-    elif "turn off light" in user_message.lower():
-        toggle_device("light", False)
-        device_states["light"] = False
-    elif "turn on fan" in user_message.lower():
-        toggle_device("fan", True)
-        device_states["fan"] = True
-    elif "turn off fan" in user_message.lower():
-        toggle_device("fan", False)
-        device_states["fan"] = False
-    
-    return jsonify({"response": response})
+def log_data(temp, humi):
+    with open(LOG_FILE, 'a') as f:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        f.write(f"{timestamp}, {temp}°C, {humi}%\n")
 
 @app.route('/api/sensors', methods=['GET'])
-def sensors():
-    return jsonify(sensor_data)
+def get_sensors():
+    try:
+        temp = dht_device.temperature
+        humi = dht_device.humidity
+        if temp is None or humi is None:
+            raise ValueError("Failed to read from DHT11")
+        log_data(temp, humi)
+        return jsonify({"temperature": temp, "humidity": humi})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/control', methods=['POST'])
 def control():
     data = request.json
     device = data.get('device')
     state = data.get('state')
-    
-    if device not in ["light", "fan"]:
-        return jsonify({"error": "Invalid device"}), 400
-    
-    # Update device state
-    device_states[device] = state
-    
-    # Control the physical device
-    toggle_device(device, state)
-    
-    return jsonify({"device": device, "state": state})
+
+    try:
+        if device == 'light1':
+            GPIO.output(LIGHT_PIN, GPIO.HIGH if state else GPIO.LOW)
+        elif device == 'fan1':
+            GPIO.output(FAN_PIN, GPIO.HIGH if state else GPIO.LOW)
+        elif device == 'gate':
+            angle = 90 if state else 0
+            servo.ChangeDutyCycle(2 + (angle / 18))  # Convert angle to duty cycle
+            time.sleep(0.5)  # Allow servo to move
+            servo.ChangeDutyCycle(0)
+        else:
+            return jsonify({"error": "Unknown device"}), 400
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    try:
+        app.run(host='0.0.0.0', port=5000, debug=False)
+    finally:
+        GPIO.output(LIGHT_PIN, GPIO.LOW)
+        GPIO.output(FAN_PIN, GPIO.LOW)
+        servo.ChangeDutyCycle(0)
+        GPIO.cleanup()
+        servo.stop()
