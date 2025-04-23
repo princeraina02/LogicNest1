@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home Voice Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .pulse {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        .listening {
+            animation: listening 1.5s infinite;
+            background-color: #ef4444;
+        }
+        @keyframes listening {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .status-dot {
+            width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-left: 5px;
+        }
+        .green-dot { background-color: #10b981; }
+        .red-dot { background-color: #ef4444; }
+        .disabled { opacity: 0.5; pointer-events: none; cursor: not-allowed; }
+        #server-status {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        .status-online {
+            background-color: #10b981;
+            color: white;
+        }
+        .status-offline {
+            background-color: #ef4444;
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-center text-blue-600">Smart Home Voice Assistant</h1>
+            <p class="text-center text-gray-600">Control your home with voice commands or manual controls</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Voice Assistant Panel -->
+            <div class="md:col-span-2 bg-white rounded-lg shadow-md p-4">
+                <div id="conversation" class="h-80 overflow-y-auto mb-4 p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-start mb-4">
+                        <div class="bg-blue-100 rounded-lg p-3 max-w-3/4">
+                            <p class="text-blue-800">Hello! I'm your smart home assistant. How can I help you today?</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div class="flex-grow mr-4">
+                        <input type="text" id="text-input" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type a command or press the mic button...">
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="send-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                        </button>
+                        <button id="mic-btn" class="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-full w-10 h-10 flex items-center justify-center transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="status" class="mt-2 text-sm text-gray-500 text-center hidden">Listening...</div>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <div class="mb-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Sensor Readings</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-blue-50 p-4 rounded-lg text-center">
+                            <div class="text-blue-500 mb-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                            </div>
+                            <p class="text-sm text-gray-600">Temperature <span id="temp-status" class="status-dot red-dot"></span></p>
+                            <p id="temperature" class="text-2xl font-bold text-blue-600">--°C</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg text-center">
+                            <div class="text-green-500 mb-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                                </svg>
+                            </div>
+                            <p class="text-sm text-gray-600">Humidity <span id="humi-status" class="status-dot red-dot"></span></p>
+                            <p id="humidity" class="text-2xl font-bold text-green-600">--%</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">Device Controls</h2>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+                            <div class="flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                </svg>
+                                <span class="font-medium">Light 1 <span id="light-status" class="status-dot red-dot"></span></span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="light-toggle" class="sr-only peer" data-device="light_1">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+                            <div class="flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                </svg>
+                                <span class="font-medium">Fan 1 <span id="fan-status" class="status-dot red-dot"></span></span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="fan-toggle" class="sr-only peer" data-device="fan_1">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+                            <div class="flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                                </svg>
+                                <span class="font-medium">Gate 1 <span id="gate-status" class="status-dot red-dot"></span></span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="gate-toggle" class="sr-only peer" data-device="gate_1">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="server-status" class="status-offline">Server: Checking...</div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM Elements
+            const micBtn = document.getElementById('mic-btn');
+            const sendBtn = document.getElementById('send-btn');
+            const textInput = document.getElementById('text-input');
+            const conversation = document.getElementById('conversation');
+            const statusEl = document.getElementById('status');
+            const temperatureEl = document.getElementById('temperature');
+            const humidityEl = document.getElementById('humidity');
+            const tempStatusEl = document.getElementById('temp-status');
+            const humiStatusEl = document.getElementById('humi-status');
+            const lightToggle = document.getElementById('light-toggle');
+            const fanToggle = document.getElementById('fan-toggle');
+            const gateToggle = document.getElementById('gate-toggle');
+            const lightStatusEl = document.getElementById('light-status');
+            const fanStatusEl = document.getElementById('fan-status');
+            const gateStatusEl = document.getElementById('gate-status');
+            const serverStatusEl = document.getElementById('server-status');
+
+            // Server status tracking
+            let serverOnline = false;
+            let pendingRequests = 0;
+            let lastSuccessfulRequest = Date.now();
+            const MAX_REQUEST_TIME = 10000; // 10 seconds
+            const HEALTH_CHECK_INTERVAL = 5000; // 5 seconds
+
+            // Speech Recognition Setup
+            let recognition = null;
+            if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+                recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+            }
+
+            // Speech Synthesis Setup
+            const synth = window.speechSynthesis;
+
+            // Initial data fetch with retry
+            fetchWithRetry(() => fetchSensorData(), 3, 1000);
+            fetchWithRetry(() => fetchDeviceStates(), 3, 1000);
+
+            // Set up polling for sensor data and health checks
+            const sensorInterval = setInterval(() => {
+                if (serverOnline) {
+                    fetchSensorData();
+                }
+            }, 5000);
+
+            const healthCheckInterval = setInterval(checkServerHealth, HEALTH_CHECK_INTERVAL);
+
+            // Event Listeners
+            micBtn.addEventListener('click', toggleListening);
+            sendBtn.addEventListener('click', sendMessage);
+            textInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') sendMessage();
+            });
+
+            lightToggle.addEventListener('change', function() {
+                if (serverOnline) {
+                    toggleDevice('light_1', this.checked);
+                } else {
+                    // Revert the toggle if server is offline
+                    this.checked = !this.checked;
+                    showServerOfflineMessage();
+                }
+            });
+
+            fanToggle.addEventListener('change', function() {
+                if (serverOnline) {
+                    toggleDevice('fan_1', this.checked);
+                } else {
+                    // Revert the toggle if server is offline
+                    this.checked = !this.checked;
+                    showServerOfflineMessage();
+                }
+            });
+
+            gateToggle.addEventListener('change', function() {
+                if (serverOnline) {
+                    toggleDevice('gate_1', this.checked);
+                } else {
+                    // Revert the toggle if server is offline
+                    this.checked = !this.checked;
+                    showServerOfflineMessage();
+                }
+            });
+
+            // Speech Recognition Event Handlers
+            if (recognition) {
+                recognition.onstart = function() {
+                    statusEl.textContent = 'Listening...';
+                    statusEl.classList.remove('hidden');
+                    micBtn.classList.add('listening');
+                };
+
+                recognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    textInput.value = transcript;
+                    sendCommand(transcript);
+                };
+
+                recognition.onend = function() {
+                    statusEl.classList.add('hidden');
+                    micBtn.classList.remove('listening');
+                };
+
+                recognition.onerror = function(event) {
+                    console.error('Speech recognition error', event.error);
+                    statusEl.classList.add('hidden');
+                    micBtn.classList.remove('listening');
+                    addMessage('Sorry, I couldn\'t hear you. Please try again.', 'assistant');
+                };
+            }
+
+            // Functions
+            function toggleListening() {
+                if (!recognition) {
+                    addMessage('Speech recognition is not supported in this browser.', 'assistant');
+                    return;
+                }
+
+                if (micBtn.classList.contains('listening')) {
+                    recognition.stop();
+                } else {
+                    if (serverOnline) {
+                        recognition.start();
+                    } else {
+                        showServerOfflineMessage();
+                    }
+                }
+            }
+
+            function sendMessage() {
+                const message = textInput.value.trim();
+                if (!message) return;
+
+                if (serverOnline) {
+                    sendCommand(message);
+                    textInput.value = '';
+                } else {
+                    showServerOfflineMessage();
+                }
+            }
+
+            function sendCommand(message) {
+                addMessage(message, 'user');
+
+                fetchWithTimeout('/api/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: message })
+                }, 5000)
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(data => {
+                    const response = data.response;
+                    addMessage(response, 'assistant');
+                    speakText(response);
+                    fetchDeviceStates(); // Refresh device states after command
+                    updateServerStatus(true);
+                })
+                .catch(error => {
+                    console.error('Command processing error:', error);
+                    addMessage('Sorry, there was an error processing your command.', 'assistant');
+                    updateServerStatus(false);
+                });
+            }
+
+            function addMessage(text, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'flex items-start mb-4 ' + (sender === 'user' ? 'justify-end' : '');
+
+                const messageBubble = document.createElement('div');
+                messageBubble.className = sender === 'user'
+                    ? 'bg-blue-500 text-white rounded-lg p-3 max-w-3/4'
+                    : 'bg-blue-100 rounded-lg p-3 max-w-3/4';
+
+                const messageText = document.createElement('p');
+                messageText.className = sender === 'user' ? 'text-white' : 'text-blue-800';
+                messageText.textContent = text;
+
+                messageBubble.appendChild(messageText);
+                messageDiv.appendChild(messageBubble);
+                conversation.appendChild(messageDiv);
+                conversation.scrollTop = conversation.scrollHeight;
+            }
+
+            function speakText(text) {
+                if (synth) {
+                    synth.cancel(); // Cancel any ongoing speech
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.rate = 1.0;
+                    utterance.pitch = 1.0;
+                    synth.speak(utterance);
+                }
+            }
+
+            function fetchSensorData() {
+                return fetchWithTimeout('/api/sensors', {}, 5000)
+                    .then(response => {
+                        if (!response.ok) throw new Error('Network response was not ok');
+                        return response.json();
+                    })
+                    .then(data => {
+                        temperatureEl.textContent = `${data.temperature1}°C`;
+                        humidityEl.textContent = `${data.humidity1}%`;
+
+                        const sensorActive = data.status?.dht1 || false;
+                        tempStatusEl.classList.remove(sensorActive ? 'red-dot' : 'green-dot');
+                        tempStatusEl.classList.add(sensorActive ? 'green-dot' : 'red-dot');
+                        humiStatusEl.classList.remove(sensorActive ? 'red-dot' : 'green-dot');
+                        humiStatusEl.classList.add(sensorActive ? 'green-dot' : 'red-dot');
+
+                        updateServerStatus(true);
+                        return true;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching sensor data:', error);
+                        updateServerStatus(false);
+                        return false;
+                    });
+            }
+
+            function fetchDeviceStates() {
+                return fetchWithTimeout('/api/devices', {}, 5000)
+                    .then(response => {
+                        if (!response.ok) throw new Error('Network response was not ok');
+                        return response.json();
+                    })
+                    .then(data => {
+                        updateDeviceUI(data.devices);
+                        updateServerStatus(true);
+                        return true;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching device states:', error);
+                        updateServerStatus(false);
+                        return false;
+                    });
+            }
+
+            function updateDeviceUI(devices) {
+                // Update toggle switches
+                lightToggle.checked = devices['light_1'] || false;
+                fanToggle.checked = devices['fan_1'] || false;
+                gateToggle.checked = devices['gate_1'] || false;
+
+                // Update status indicators
+                updateStatusDot(lightStatusEl, devices['light_1']);
+                updateStatusDot(fanStatusEl, devices['fan_1']);
+                updateStatusDot(gateStatusEl, devices['gate_1']);
+            }
+
+            function updateStatusDot(element, isActive) {
+                element.classList.remove(isActive ? 'red-dot' : 'green-dot');
+                element.classList.add(isActive ? 'green-dot' : 'red-dot');
+            }
+
+            function toggleDevice(device, state) {
+                pendingRequests++;
+
+                fetchWithTimeout('/api/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device, state })
+                }, 5000)
+                .then(response => {
+                    pendingRequests--;
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(data => {
+                    console.log(`${device} set to ${state ? 'ON' : 'OFF'}`);
+                    const isActive = data.device_state || false;
+
+                    // Update the specific device status
+                    const statusEl = document.getElementById(`${device.split('_')[0]}-status`);
+                    if (statusEl) {
+                        updateStatusDot(statusEl, isActive);
+                    }
+
+                    updateServerStatus(true);
+                })
+                .catch(error => {
+                    pendingRequests--;
+                    console.error('Error toggling device:', error);
+                    updateServerStatus(false);
+
+                    // Revert the toggle state on error
+                    const toggleEl = document.querySelector(`[data-device="${device}"]`);
+                    if (toggleEl) {
+                        toggleEl.checked = !state;
+                    }
+                });
+            }
+
+            function checkServerHealth() {
+                fetchWithTimeout('/api/health', {}, 3000)
+                    .then(response => {
+                        if (!response.ok) throw new Error('Health check failed');
+                        return response.json();
+                    })
+                    .then(data => {
+                        updateServerStatus(true);
+                    })
+                    .catch(error => {
+                        console.error('Health check failed:', error);
+                        updateServerStatus(false);
+                    });
+            }
+
+            function updateServerStatus(online) {
+                if (online) {
+                    lastSuccessfulRequest = Date.now();
+
+                    if (!serverOnline) {
+                        console.log('Server is back online');
+                        serverOnline = true;
+                        serverStatusEl.textContent = 'Server: Online';
+                        serverStatusEl.className = 'status-online';
+
+                        // Re-fetch data when server comes back online
+                        fetchSensorData();
+                        fetchDeviceStates();
+                    }
+                } else {
+                    // Only mark as offline if it's been a while since the last successful request
+                    if (Date.now() - lastSuccessfulRequest > MAX_REQUEST_TIME) {
+                        if (serverOnline) {
+                            console.log('Server is offline');
+                            serverOnline = false;
+                            serverStatusEl.textContent = 'Server: Offline';
+                            serverStatusEl.className = 'status-offline';
+                        }
+                    }
+                }
+            }
+
+            function showServerOfflineMessage() {
+                addMessage('Sorry, the server is currently offline. Please try again later.', 'assistant');
+            }
+
+            // Utility function to fetch with timeout
+            function fetchWithTimeout(url, options = {}, timeout = 5000) {
+                return new Promise((resolve, reject) => {
+                    // Set up timeout
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => {
+                        controller.abort();
+                        reject(new Error('Request timeout'));
+                    }, timeout);
+
+                    // Add signal to options
+                    options.signal = controller.signal;
+
+                    // Perform fetch
+                    fetch(url, options)
+                        .then(response => {
+                            clearTimeout(timeoutId);
+                            resolve(response);
+                        })
+                        .catch(error => {
+                            clearTimeout(timeoutId);
+                            reject(error);
+                        });
+                });
+            }
+
+            // Utility function to fetch with retry
+            function fetchWithRetry(fetchFn, maxRetries = 3, delay = 1000) {
+                return new Promise((resolve, reject) => {
+                    function attempt(retryCount) {
+                        fetchFn()
+                            .then(result => {
+                                resolve(result);
+                            })
+                            .catch(error => {
+                                if (retryCount < maxRetries) {
+                                    console.log(`Retry attempt ${retryCount + 1} after ${delay}ms`);
+                                    setTimeout(() => attempt(retryCount + 1), delay);
+                                } else {
+                                    reject(error);
+                                }
+                            });
+                    }
+
+                    attempt(0);
+                });
+            }
+
+            // Clean up on page unload
+            window.addEventListener('beforeunload', function() {
+                clearInterval(sensorInterval);
+                clearInterval(healthCheckInterval);
+
+                if (recognition && micBtn.classList.contains('listening')) {
+                    recognition.stop();
+                }
+
+                if (synth && synth.speaking) {
+                    synth.cancel();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
