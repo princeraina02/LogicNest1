@@ -54,7 +54,7 @@ The backend communicates with hardware components through GPIO pins and provides
 
 ```shellscript
 git clone https://github.com/princeraina02/WhisperPi-Home
-cd smart-home-voice-assistant
+cd WhisperPi-Home
 ```
 
 ### Step 2: Create and Activate Virtual Environment
