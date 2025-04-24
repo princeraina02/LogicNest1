@@ -22,7 +22,7 @@ A comprehensive voice-controlled smart home system that allows you to manage and
 - **Frontend**: HTML, JavaScript, Tailwind CSS
 - **Hardware**:
 
-- Raspberry Pi (optional)
+- Raspberry Pi
 - DHT22 temperature and humidity sensor
 - Relay modules for lights and fans
 - Servo motor for gate control
@@ -35,7 +35,7 @@ A comprehensive voice-controlled smart home system that allows you to manage and
 
 The system consists of two main components:
 
-1. **Flask Backend (`app.py`)**: Handles device control, sensor readings, and processes voice commands
+1. **Flask Backend (`project.py`)**: Handles device control, sensor readings, and processes voice commands
 2. **Web Frontend (`index.html`)**: Provides the user interface for monitoring and control
 
 
@@ -61,9 +61,6 @@ cd smart-home-voice-assistant
 
 ```shellscript
 python -m venv venv
-# On Windows
-venv\Scripts\activate
-# On macOS/Linux
 source venv/bin/activate
 ```
 
@@ -71,14 +68,13 @@ source venv/bin/activate
 
 ```shellscript
 pip install flask
-# If using actual hardware
 pip install RPi.GPIO adafruit-circuitpython-dht
 ```
 
 ### Step 4: Run the Application
 
 ```shellscript
-python app.py
+python project.py
 ```
 
 The application will start on `http://0.0.0.0:5000`. You can access it from any device on your local network by navigating to `http://[raspberry-pi-ip]:5000`.
