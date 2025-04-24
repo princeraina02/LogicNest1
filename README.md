@@ -53,7 +53,7 @@ The backend communicates with hardware components through GPIO pins and provides
 ### Step 1: Clone the Repository
 
 ```shellscript
-git clone https://github.com/yourusername/smart-home-voice-assistant.git
+git clone https://github.com/princeraina02/WhisperPi-Home
 cd smart-home-voice-assistant
 ```
 
