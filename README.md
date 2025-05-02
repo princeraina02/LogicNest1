@@ -35,8 +35,8 @@ A comprehensive voice-controlled smart home system that allows you to manage and
 
 The system consists of two main components:
 
-1. **Flask Backend (`project.py`)**: Handles device control, sensor readings, and processes voice commands
-2. **Web Frontend (`index.html`)**: Provides the user interface for monitoring and control
+1. **Flask Backend (`app.py`)**: Handles device control, sensor readings, and processes voice commands
+2. **Web Frontend (`project.html`)**: Provides the user interface for monitoring and control
 
 
 The backend communicates with hardware components through GPIO pins and provides RESTful API endpoints for the frontend to consume.
@@ -74,7 +74,7 @@ pip install RPi.GPIO adafruit-circuitpython-dht
 ### Step 4: Run the Application
 
 ```shellscript
-python project.py
+python app.py
 ```
 
 The application will start on `http://0.0.0.0:5000`. You can access it from any device on your local network by navigating to `http://[raspberry-pi-ip]:5000`.
